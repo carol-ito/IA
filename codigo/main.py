@@ -5,6 +5,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist, squareform
+import random
 import math
 
 
@@ -35,11 +36,56 @@ def salvar_saida(caminho_saida, ids, rotulos):
 # Implementação K-média
 # ==============================================================
 
-def executar_kmeans(atributos, k, n_iteracoes=100):
-    """Executa o K-Means para um valor específico de k."""
-    kmeans = KMeans(n_clusters=k, max_iter=n_iteracoes, n_init=10, random_state=42)
-    kmeans.fit(atributos)
-    return kmeans.labels_
+# distancia euclidiana
+def distancia(p1, p2):
+    diff = np.array(p1) - np.array(p2)
+    return np.sqrt(np.sum(diff ** 2))
+
+# cálculo das médias
+def media_dos_pontos(cluster):
+    if not cluster:
+        return []
+    
+    n = len(cluster)
+    m = len(cluster[0])
+
+    medias = []
+    for j in range(m):
+        soma = sum(ponto[j] for ponto in cluster)
+        medias.append(soma / n)
+    return medias
+
+def indice_menor_valor(lista):
+    menor = min(lista)
+    return lista.index(menor)
+
+def pontos_do_cluster_i(dados, rotulos, i):
+    cluster = []
+    for j in range(len(dados)):
+        if rotulos[j] == i:
+            cluster.append(dados[j])
+    return cluster
+
+def k_medias(dados, k, max_iter=10): 
+
+    centroides = random.sample(list(dados), k)
+
+    for _ in range(max_iter):
+        rotulos = []
+        for ponto in dados:
+            distancias = [distancia(ponto, c) for c in centroides]
+            rotulos.append(indice_menor_valor(distancias))
+
+        novos_centroides = []
+        for i in range(k):
+            cluster_i = pontos_do_cluster_i(dados, rotulos, i)
+            if cluster_i:
+                novos_centroides.append(media_dos_pontos(cluster_i))
+            else:
+                novos_centroides.append(random.choice(dados))
+        centroides = novos_centroides
+
+    return rotulos
 
 # ==============================================================
 # Implementação Complete Link
@@ -65,7 +111,7 @@ def gerar_rotulos(clusters, num_pontos):
             rotulos[ponto_idx] = cluster_id
     return rotulos
 
-def complete_link_hierarquico(dados, kMin, kMax):
+def complete_link(dados, kMin, kMax):
 
     num_pontos = len(dados)
     
@@ -108,6 +154,29 @@ def complete_link_hierarquico(dados, kMin, kMax):
     return particoes_resultado
 
 # ==============================================================
+# Funções do Scypy para Teste
+# ==============================================================
+
+def executar_kmeans(atributos, k, n_iteracoes=100):
+    
+    kmeans = KMeans(n_clusters=k, max_iter=n_iteracoes, n_init=10, random_state=42)
+    kmeans.fit(atributos)
+    return kmeans.labels_
+
+def executar_hierarquico(atributos, kMin, kMax, metodo):
+
+    # 1. Constrói o dendrograma completo de uma só vez. É muito mais rápido.
+    Z = linkage(atributos, method=metodo, metric='euclidean')
+    
+    particoes = {}
+    # 2. "Corta" o dendrograma para cada valor de k desejado.
+    for k in range(kMin, kMax + 1):
+        rotulos = fcluster(Z, k, criterion='maxclust') - 1
+        particoes[k] = rotulos
+        
+    return particoes
+
+# ==============================================================
 # Função Principal de Execução
 # ==============================================================
 
@@ -118,7 +187,7 @@ def executar_algoritmos():
         'monkey': {'k_range': range(5, 13), 'real_clu': 'monkeyReal1.clu'}
     }
     
-    algoritmos = ['kmeans', 'single-link', 'complete-link']
+    algoritmos = ['k-media', 'single-link', 'complete-link']
     
     resultados_finais = []
 
@@ -137,18 +206,22 @@ def executar_algoritmos():
             
             particoes_geradas = {}
             
-            if nome_algoritmo == 'kmeans':
-                # K-Means precisa ser rodado para cada k individualmente
+            if nome_algoritmo == 'k-media':
+                # K-media precisa ser rodado para cada k individualmente
                 for k in info['k_range']:
-                    particoes_geradas[k] = executar_kmeans(atributos, k)
+                    particoes_geradas[k] = k_medias(atributos, k)
 
-            elif nome_algoritmo == 'single': 
+            elif nome_algoritmo == 'single-link': 
                 # Single-link
-                print("  Executando Single-Link Hierárquico...")
+                particoes_geradas = executar_hierarquico(atributos, k_min, k_max, metodo='single')
             
             else:
                 # Complete-link
-                particoes_geradas = complete_link_hierarquico(atributos, k_min, k_max)
+                particoes_geradas = complete_link(atributos, k_min, k_max)
+
+            melhor_k = -1
+            melhor_score = -2 # AR pode ser negativo, então iniciamos com um valor baixo
+            melhor_particao = None
             
             # Salva e avalia cada partição gerada pelo algoritmo
             diretorio_saida = f'../particoes_geradas/{nome_algoritmo}'
@@ -160,6 +233,11 @@ def executar_algoritmos():
                 
                 score_ar = adjusted_rand_score(labels_reais, rotulos_gerados)
                 print(f"  -> k={k}, Índice Rand Ajustado (AR): {score_ar:.4f}")
+
+                if score_ar > melhor_score:
+                    melhor_score = score_ar
+                    melhor_k = k
+                    melhor_particao = rotulos_gerados
                 
                 resultados_finais.append({
                     'dataset': nome_base,
