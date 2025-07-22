@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
-from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import pdist, squareform
 import random
 import math
@@ -154,27 +152,70 @@ def complete_link(dados, kMin, kMax):
     return particoes_resultado
 
 # ==============================================================
-# Funções do Scypy para Teste
+# Implementação Single Link
 # ==============================================================
 
-def executar_kmeans(atributos, k, n_iteracoes=100):
+def single_link(dados, kMin, kMax):
     
-    kmeans = KMeans(n_clusters=k, max_iter=n_iteracoes, n_init=10, random_state=42)
-    kmeans.fit(atributos)
-    return kmeans.labels_
-
-def executar_hierarquico(atributos, kMin, kMax, metodo):
-
-    # 1. Constrói o dendrograma completo de uma só vez. É muito mais rápido.
-    Z = linkage(atributos, method=metodo, metric='euclidean')
+    num_pontos = len(dados)
     
-    particoes = {}
-    # 2. "Corta" o dendrograma para cada valor de k desejado.
-    for k in range(kMin, kMax + 1):
-        rotulos = fcluster(Z, k, criterion='maxclust') - 1
-        particoes[k] = rotulos
+    # Calcula a matriz de distâncias previamente
+    dist_matrix = squareform(pdist(dados, metric='euclidean'))
+
+    # infinito na diagonal para que um cluster não seja unido com ele mesmo
+    np.fill_diagonal(dist_matrix, float('inf'))
+
+    # Inicializando cada ponto como um cluster separado
+    clusters = [[i] for i in range(num_pontos)]
+    particoes_resultado = {}
+
+    # Salva a partição inicial se estiver no intervalo
+    if kMin <= len(clusters) <= kMax:
+        particoes_resultado[len(clusters)] = gerar_rotulos(clusters, num_pontos)
+
+    for _ in range(num_pontos - kMin):
+        # Para o loop se só sobrar um cluster
+        if len(clusters) <= 1: break 
+
+        # Encontra o par mais próximo na matriz de distâncias atual
+        i, j = np.unravel_index(np.argmin(dist_matrix), dist_matrix.shape)
         
-    return particoes
+        # Garante que i < j
+        if i > j: i, j = j, i
+
+        # Une os dois clusters mais próximos
+        cluster1_indices = clusters[i]
+        cluster2_indices = clusters[j]
+        cluster_unido = cluster1_indices + cluster2_indices
+        
+        # Atualizando a matriz de distâncias Para refletir a união
+        nova_linha = np.minimum(dist_matrix[i, :], dist_matrix[j, :])
+        
+        # Remove a linha/coluna do segundo cluster unido 
+        dist_matrix = np.delete(dist_matrix, j, axis=0) 
+        dist_matrix = np.delete(dist_matrix, j, axis=1) 
+
+        nova_linha = np.delete(nova_linha, j)
+
+        # Substitui a linha/coluna do primeiro cluster unido (i) pela nova linha calculada
+        dist_matrix[i, :] = nova_linha
+        dist_matrix[:, i] = nova_linha
+
+        # Garante que a diagonal seja infinita
+        np.fill_diagonal(dist_matrix, float('inf'))
+        
+        # Atualiza a lista de clusters
+        clusters.pop(j) 
+        clusters[i] = cluster_unido
+        
+        # Salva a partição se o número de clusters atual estiver no intervalo
+        num_clusters_atual = len(clusters)
+        if kMin <= num_clusters_atual <= kMax:
+            rotulos = gerar_rotulos(clusters, num_pontos)
+            particoes_resultado[num_clusters_atual] = rotulos
+
+    return particoes_resultado
+
 
 # ==============================================================
 # Função Principal de Execução
@@ -213,15 +254,11 @@ def executar_algoritmos():
 
             elif nome_algoritmo == 'single-link': 
                 # Single-link
-                particoes_geradas = executar_hierarquico(atributos, k_min, k_max, metodo='single')
+                particoes_geradas = single_link(atributos, k_min, k_max)
             
             else:
                 # Complete-link
                 particoes_geradas = complete_link(atributos, k_min, k_max)
-
-            melhor_k = -1
-            melhor_score = -2 # AR pode ser negativo, então iniciamos com um valor baixo
-            melhor_particao = None
             
             # Salva e avalia cada partição gerada pelo algoritmo
             diretorio_saida = f'../particoes_geradas/{nome_algoritmo}'
@@ -233,11 +270,6 @@ def executar_algoritmos():
                 
                 score_ar = adjusted_rand_score(labels_reais, rotulos_gerados)
                 print(f"  -> k={k}, Índice Rand Ajustado (AR): {score_ar:.4f}")
-
-                if score_ar > melhor_score:
-                    melhor_score = score_ar
-                    melhor_k = k
-                    melhor_particao = rotulos_gerados
                 
                 resultados_finais.append({
                     'dataset': nome_base,
