@@ -22,23 +22,48 @@ def plot_ari_por_k():
     plt.savefig("grafico_ari_por_k.png")
     plt.show()
 
-def plot_clusters_dispersao(dataset, k, algoritmo):
+def plot_comparacao_clusters(dataset, k, algoritmo):
+    # --- Carrega dados base (x, y) ---
     caminho_dados = f'../datasets/{dataset}.txt'
     dados_df = pd.read_csv(caminho_dados, sep=r'\s+', header=None, names=['id', 'x', 'y'])
 
+    # --- Clusters gerados pelo algoritmo ---
     caminho_rotulos = f'../particoes_geradas/{algoritmo}/particao_{dataset}_k{k}.txt'
     rotulos_df = pd.read_csv(caminho_rotulos, sep=r'\s+', header=None, names=['id', 'cluster'])
+    dados_cluster = pd.merge(dados_df, rotulos_df, on='id')
 
-    dados_df['cluster'] = rotulos_df['cluster']
+    # --- Tenta carregar rótulos reais com id + label ---
+    if dataset == 'monkey':
+        caminho_reais = f'../datasets/{dataset}Real1.clu'
+    else:
+        caminho_reais = f'../datasets/{dataset}Real.clu'
+    
+    possui_reais = os.path.exists(caminho_reais)
 
-    plt.figure(figsize=(6, 6))
-    sns.scatterplot(data=dados_df, x='x', y='y', hue='cluster', palette='Set1', s=60)
-    plt.title(f'{algoritmo} – {dataset} (k={k})')
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.legend(title='Cluster')
+    if possui_reais:
+        rotulos_reais = pd.read_csv(caminho_reais, sep=r'\s+', header=None, names=['id', 'label'])
+        dados_reais = pd.merge(dados_df, rotulos_reais, on='id')
+
+    # --- Plot side by side ---
+    fig, axes = plt.subplots(1, 2 if possui_reais else 1, figsize=(12 if possui_reais else 6, 6))
+    if not possui_reais:
+        axes = [axes]
+
+    # Clusters gerados
+    sns.scatterplot(data=dados_cluster, x='x', y='y', hue='cluster', palette='Set1', s=60, ax=axes[0])
+    axes[0].set_title(f'{algoritmo} – {dataset} (k={k})')
+    axes[0].set_xlabel("x")
+    axes[0].set_ylabel("y")
+
+    # Rótulos reais (se houver)
+    if possui_reais:
+        sns.scatterplot(data=dados_reais, x='x', y='y', hue='label', palette='Dark2', s=60, ax=axes[1])
+        axes[1].set_title(f'Rótulos Reais – {dataset}')
+        axes[1].set_xlabel("x")
+        axes[1].set_ylabel("y")
+
     plt.tight_layout()
-    plt.savefig(f'clusters_{dataset}_{algoritmo}_k{k}.png')
+    plt.savefig(f'comparacao_{dataset}_{algoritmo}_k{k}.png')
     plt.show()
 
 def plot_dendrogram_complete(dataset):
@@ -92,10 +117,7 @@ def executar_visualizacoes():
         elif algoritmo == 'single-link':
             plot_dendrogram_single(dataset)
 
-        # Depois, gráfico de dispersão com melhor k
-        plot_clusters_dispersao(dataset, int(k_melhor), algoritmo)
+        plot_comparacao_clusters(dataset, int(k_melhor), algoritmo)
 
 if __name__ == "__main__":
-    # from main import executar_algoritmos  # ajuste conforme o nome do seu script
-    # executar_algoritmos()
     executar_visualizacoes()
