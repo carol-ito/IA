@@ -8,19 +8,20 @@ import os
 # Funções auxiliares de visualização
 # ---------------------------------------------------
 
-def plot_ari_por_k():
+def plot_ari_por_k_por_dataset():
     df = pd.read_excel("resultados_finais.xlsx")
 
-    plt.figure(figsize=(10, 6))
-    sns.lineplot(data=df, x='k', y='AR_score', hue='algoritmo', style='dataset', markers=True, dashes=False)
-    plt.title("Índice Rand Ajustado (ARI) vs Número de Clusters (k)")
-    plt.xlabel("Número de Clusters (k)")
-    plt.ylabel("ARI")
-    plt.grid(True)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.savefig("grafico_ari_por_k.png")
-    plt.show()
+    for dataset in df['dataset'].unique():
+        subset = df[df['dataset'] == dataset]
+        plt.figure(figsize=(8, 5))
+        sns.lineplot(data=subset, x='k', y='AR_score', hue='algoritmo', marker='o')
+        plt.title(f"ARI vs k – Dataset: {dataset}")
+        plt.xlabel("Número de Clusters (k)")
+        plt.ylabel("ARI")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"grafico_ari_por_k_{dataset}.png")
+        plt.show()
 
 def plot_comparacao_clusters(dataset, k, algoritmo):
     # --- Carrega dados base (x, y) ---
@@ -103,7 +104,7 @@ def plot_dendrogram_single(dataset):
 # ---------------------------------------------------
 
 def executar_visualizacoes():
-    plot_ari_por_k()
+    plot_ari_por_k_por_dataset()
 
     df = pd.read_excel("resultados_finais.xlsx")
     agrupados = df.groupby(['dataset', 'algoritmo'])
