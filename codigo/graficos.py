@@ -9,7 +9,7 @@ import os
 # ---------------------------------------------------
 
 def plot_ari_por_k():
-    df = pd.read_excel("resultados_finais.ods")
+    df = pd.read_excel("resultados_finais.xlsx")
 
     plt.figure(figsize=(10, 6))
     sns.lineplot(data=df, x='k', y='AR_score', hue='algoritmo', style='dataset', markers=True, dashes=False)
@@ -105,7 +105,7 @@ def plot_dendrogram_single(dataset):
 def executar_visualizacoes():
     plot_ari_por_k()
 
-    df = pd.read_excel("resultados_finais.ods")
+    df = pd.read_excel("resultados_finais.xlsx")
     agrupados = df.groupby(['dataset', 'algoritmo'])
 
     for (dataset, algoritmo), grupo in agrupados:
